@@ -1,0 +1,237 @@
+---
+title: 'Data 621 Blog #1'
+author: "Jean Jimenez"
+date: "2024-04-14"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Simple Linear Regression of Stroke Dataset
+
+```{r}
+library(tidyverse)
+```
+
+## Introduction
+
+Simple linear regression is a tool that can be used to predict outcomes based on data. Simple Linear Regression models can be trained on real life data to help predict events before they happen.
+
+In the case of healthcare, it is important to know when a stroke is about to occur so that a team can intervene. Fortunately, there is a lot of data that exists on stroke patients. We can use some of this data and simple linear regression to help determine factors that lead to the prediction of stroke events and certain outcomes.
+
+In this blog post, I aim to explore simple linear regression on a stroke dataset. Specifically, I will use it to determine the relationships between certain blood biomarkers and poor stroke outcomes.
+
+I first begin by defining the variables in the dataset:
+
+```{python}
+import pandas as pd
+
+
+data = {
+    "VARIABLE NAME": [
+        "Auto Lymphocyte #", "Auto Lymphocyte %", "Auto Neutrophil #",
+        "Auto Neutrophil # last", "Auto Neutrophil %", "Auto Neutrophil % last",
+        "Platelet Count - Automated last", "ratio_of_Lymphocyte_Neutrophil_pct",
+        "ratio_of_Platelet_Neutrophil_cnt", "Bilirubin Total, Serum",
+        "C-Reactive Protein, Serum", "Creatinine, Serum",
+        "D-Dimer Assay, Quantitative", "Albumin, Serum",
+        "MRS_discharge_score_cleaned"
+    ],
+    "DEFINITION": [
+        "The absolute number of lymphocytes, a type of white blood cell, as measured automatically.",
+        "The percentage of lymphocytes out of total white blood cells, as measured automatically.",
+        "The absolute number of neutrophils, a type of white blood cell, as measured automatically.",
+        "The absolute number of neutrophils from the last measurement, automatically determined.",
+        "The percentage of neutrophils out of total white blood cells, as measured automatically.",
+        "The percentage of neutrophils from the last measurement, automatically determined.",
+        "The most recent automated count of platelets, which are cell fragments important for clotting.",
+        "The ratio of the percentage of lymphocytes to neutrophils.",
+        "The ratio of the absolute count of platelets to neutrophils.",
+        "The total amount of bilirubin in the serum, indicating liver function.",
+        "The level of C-reactive protein in the serum, a marker of inflammation.",
+        "The level of creatinine in the serum, indicating kidney function.",
+        "The quantitative result of a D-Dimer assay, used to help rule out the presence of an inappropriate blood clot (thrombus).",
+        "The level of albumin in the serum, a protein that can indicate nutritional status and liver function.",
+        "A cleaned score based on the Modified Rankin Scale at discharge, assessing the degree of disability or dependence in daily activities after an event like a stroke."
+    ],
+    "THEORETICAL EFFECT": [
+        "Could indicate an immune response or a decrease in immunity depending on the level.",
+        "Might reflect changes in the immune system or be indicative of specific health conditions.",
+        "High levels could suggest infection or inflammation, while low levels could indicate a compromised immune system.",
+        "Past neutrophil levels could help in observing trends in a patient's immune response over time.",
+        "A higher percentage could indicate an acute infection or chronic inflammation.",
+        "Past percentages could provide context to current immune function and response to treatment.",
+        "Low levels can indicate thrombocytopenia and a risk for bleeding; high levels could suggest clotting disorders or inflammation.",
+        "A higher ratio may suggest a viral infection, while a lower ratio could indicate bacterial infection.",
+        "This ratio can help in diagnosing and monitoring the severity of infections or inflammatory conditions.",
+        "Increased levels may indicate liver damage or disease; lower levels might be seen in certain anemias.",
+        "Elevated levels suggest inflammation or infection; it is a broad marker and not specific to any particular disease.",
+        "Elevated levels can indicate renal dysfunction or failure, while low levels can occur with reduced muscle mass.",
+        "Elevated results may suggest the presence of thrombosis or an increased risk for clotting disorders.",
+        "Low levels can indicate malnutrition, liver disease, or chronic illnesses.",
+        "This score can help in predicting patient outcomes and the need for post-discharge care."
+    ]
+}
+
+
+variables_table = pd.DataFrame(data)
+variables_table
+
+```
+
+## Data Exploration
+
+### Importing, Processing
+
+I begin by importing and processing the data set to have a target variable.
+
+I am using the MRS_discharge_score_cleaned to create the target variable
+
+A MRS score of 6 means dead. A MRS score of 5 means severely disable. 4 Means greatly disable
+
+We will see if these blood bio markers have any impact on MRS score of 4 or 5 or 6.
+
+```{r}
+library(tidyverse)
+
+shout2023_biomarkers = read_csv("~/Masters/Data621/blogs/shout2023_biomarkers.csv")
+
+blog1_dat= shout2023_biomarkers %>%
+  mutate(TARGET= if_else(MRS_discharge_score_cleaned %in% c(4,5,6),1,0, missing=NULL))
+
+blog1_dat = blog1_dat %>%
+  select(-MRS_discharge_score_cleaned)
+```
+
+### Exploration
+
+Now let us explore the distribution of predictor variables and look at the summary statistics.
+
+```{r}
+library(summarytools)
+
+blog1_stats = dfSummary(blog1_dat, stats = c("mean", "sd", "med", "IQR", "min", "max", "valid", "n.missing"))
+
+#view(blog1_stats)
+```
+
+![](images/_C__Users_bleac_AppData_Local_Temp_Rtmp8q6bHS_file628c41bb7a5f.html(iPad Air).png)
+
+The `dfSummary` function of `summarytools` package displays summary statistics of all variables in the dataframe, as well as showing the distribution and missing data.
+
+The distribution of most data seem normally distributed.
+
+Since each predictor is its own biomarker, I am leaving them all in (ignoring multicollinearity).
+
+There are about a bit under 30k records total. In terms of missing data, some rows are missing as much as 3000 records (10%).
+
+## Data Preparation
+
+Since the columns that have missing data seem to have a large range and not distributed following a pattern, I will not use mean or median imputation to fill in for missing data. Instead, I will just exclude all missing values.
+
+```{r}
+clean_blog1_dat = na.omit(blog1_dat)
+
+blog1_stats_clean = dfSummary(clean_blog1_dat, stats = c("mean", "sd", "med", "IQR", "min", "max", "valid", "n.missing"))
+
+#view(blog1_stats_clean)
+
+```
+
+![](images/_C__Users_bleac_AppData_Local_Temp_Rtmp8q6bHS_file628c27e958b8.html(iPad Air).png)
+
+Now there is no missing data.
+
+We will proceed with building the linear model.
+
+## Building Linear Regression Model
+
+I will use the `lm()` function to generate the linear model from the `stats` package.
+
+I will use all predictor variables.
+
+Use the `summary()` function to display the results of the linear regression model.
+
+```{r}
+library(stats)
+
+model1= lm(TARGET ~ ., data = clean_blog1_dat)
+
+summary(model1)
+
+```
+
+### Linear Regression Model Interpretation
+
+Coefficients Interpretation:
+
+The model shows that platelet count, total bilirubin, and the ratio of lymphocyte to neutrophil percentage all have positive coefficients. This suggests that increases in these predictors are associated with a higher likelihood of severe disability or death.
+
+Conversely, albumin demonstrates a significant negative relationship with "TARGET". Specifically, its coefficient of -0.102 indicates that higher levels of albumin are associated with lower probabilities of severe disability or death, which might reflect better overall health status.
+
+Statistical Significance:
+
+Variables such as auto_lymphocyte_ratio, auto_neutrophil_last_ratio, platelet_count, ratio of lymphocyte to neutrophil percentage, ratio of platelet to neutrophil count, total bilirubin, and albumin all show statistically significant p-values. This strong evidence against the null hypothesis suggests these factors significantly influence the severity of disability or risk of death.
+
+In contrast, predictors like auto_neutrophil_ratio and creatinine serum have non-significant p-values, indicating their effects on "TARGET" may be negligible in this model.
+
+Model Fit and Efficacy:
+
+The Residual Standard Error of 0.4226 on 24,172 degrees of freedom reflects the average deviation of data points from the fitted line, measured in the scale of "TARGET".
+
+The Multiple R-squared value of 0.04738, though relatively low, indicates that about 4.738% of the variability in "TARGET" can be accounted for by the predictors included in this model. This suggests that while the model captures a portion of the factors influencing outcomes, much of the variability remains unexplained, highlighting the complex nature of disability and mortality.
+
+The F-statistic of 133.6 and its associated very small p-value (\< 2.2e-16) confirm the overall statistical significance of the model, indicating that it successfully identifies at least some key factors affecting severe outcomes in patients.
+
+## Creating an Improved Linear Regression Model.
+
+To make this model better, I've included interaction terms such as `auto_lymphocyte_rat`, `platelet_count`, `auto_neutrophil_last_rat`, `ratio_of_Lymphocyte_Neutrophil_pct`, and `platelet_count`, `bilirubin_total`. These interactions might reveal combined effects that are not apparent when considering the variables independently.
+
+Interaction terms are chosen based on logical associations that might exist between the variables. For example, how the lymphocyte ratio interacts with platelet count could be relevant in the context of immune responses or inflammation that both could relate to the severity of the medical condition leading to disability or death.
+
+```{r}
+enhanced_model = lm(TARGET ~ auto_lymphocyte_rat + auto_neutrophil_last_rat +
+                       platelet_count + ratio_of_Lymphocyte_Neutrophil_pct +
+                       ratio_of_Platelet_Neutrophil_cnt + bilirubin_total +
+                       albumin + 
+                       auto_lymphocyte_rat:platelet_count +
+                       auto_neutrophil_last_rat:ratio_of_Lymphocyte_Neutrophil_pct +
+                       platelet_count:bilirubin_total,
+                     data = clean_blog1_dat)
+
+summary(enhanced_model)
+```
+
+### Enhanced Model Interpretation
+
+Model Coefficients and Interpretation:
+
+Main effects: Most of the predictors retained their significance and direction of influence from the previous model. For instance, albumin continues to show a strong negative relationship with "TARGET," suggesting higher albumin levels are associated with a decreased risk of severe outcomes. Platelet count and ratio of Lymphocyte Neutrophil pct remain positive, indicating an increase in these variables correlates with an increased risk.
+
+Interaction terms: The interaction between `auto_neutrophil_last_rat` and `ratio_of_Lymphocyte_Neutrophil_pct` is particularly notable with a coefficient of 0.0042 and is highly significant (p \< 2.2e-12), suggesting that the combined effect of these predictors on "TARGET" is greater than their individual effects. However, other interaction terms, such as `auto_lymphocyte_rat`:`platelet_count`, did not demonstrate a significant effect, suggesting that the simple interaction of these two factors does not notably influence the outcome within the model's context.
+
+Statistical Significance:
+
+Predictors like `auto_lymphocyte_rat`, `ratio_of_Platelet_Neutrophil_cnt`, and `auto_neutrophil_last_rat`:`ratio_of_Lymphocyte_Neutrophil_pct` are highly significant, reflecting their substantial impact on "TARGET". Conversely, the interaction term `platelet_count`:`bilirubin_total` and `bilirubin_total` itself did not achieve statistical significance, indicating that their contributions might be more complex or require different modeling approaches to be adequately captured.
+
+Model Fit and Evaluation:
+
+The Residual Standard Error (RSE) slightly decreased to 0.4222 from 0.4226, indicating a minor improvement in the model's accuracy in predicting the data points.
+
+The Multiple R-squared increased marginally to 0.04925 from 0.04738, and the Adjusted R-squared followed suit to 0.04885 from 0.04703, suggesting a slight enhancement in the model’s explanatory power due to the addition of interaction terms.
+
+The F-statistic remains highly significant (p-value \< 2.2e-16), confirming that the model is statistically meaningful and that the inclusion of new terms is justified.
+
+## Conclusion
+
+This analysis of stroke data using simple linear regression provides valuable insights into the factors contributing to severe outcomes such as severe disability or death. By examining a range of blood biomarkers, we can identify key predictors that correlate with these serious health events. Notably, variables like platelet count and total bilirubin were positively associated with higher risk scores, suggesting that these factors can serve as critical indicators in predicting severe outcomes. Conversely, albumin exhibited a negative relationship with the target variable, highlighting its potential protective role against severe disability or mortality.
+
+The initial regression model indicated that while significant relationships exist among some biomarkers and the severity of stroke outcomes, the overall variability explained by the model was limited. This underscores the complex nature of stroke-related disabilities and fatalities, which likely involve multifaceted interactions between various biological systems.
+
+To refine the predictive accuracy, an enhanced model incorporated interaction terms, addressing the potential combined effects of biomarkers. The inclusion of interactions such as the one between `auto_neutrophil_last_rat` and `ratio_of_Lymphocyte_Neutrophil_pct` proved to be highly significant, suggesting that the interplay between these markers significantly impacts stroke outcomes. This advanced model approach demonstrated a slight improvement in explaining the variability in patient outcomes, as evidenced by a modest increase in the R-squared value.
+
+Despite these improvements, the persistently low R-squared value after model enhancement highlights the possibility of unaccounted factors or the need for alternative modeling techniques to fully capture the dynamics influencing severe stroke outcomes.
+
+In conclusion, the complexity of stroke demands ongoing research efforts to refine predictive models and enhance the accuracy and reliability of these predictions. This is crucial for timely and effective interventions that can potentially reduce the incidence of severe outcomes in stroke patients.
