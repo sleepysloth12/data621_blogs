@@ -3,7 +3,8 @@ CUNY SPS Data 621 Blog Posts by Jean Jimenez
 
 
 
-Blog Post 1 --- Simple Linear Regression of Stroke Dataset
+## Blog Post 1 
+### Simple Linear Regression of Stroke Dataset
 
 Analysis of blood biomarker data to use as a predictor for poor stroke outcome (MRS > = 4).
 
